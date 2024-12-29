@@ -1,95 +1,107 @@
 import React, { useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument, rgb } from 'pdf-lib';
-import { Edit2 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 function App() {
+  const [pdfFile, setPdfFile] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [extractedText, setExtractedText] = useState([]);
   const [selectedText, setSelectedText] = useState(null);
   const [editedText, setEditedText] = useState('');
-  const [pdfFile, setPdfFile] = useState(null);
   const [pageHeight, setPageHeight] = useState(0);
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
     setPdfFile(file);
 
-    const fileReader = new FileReader();
-    fileReader.onload = async function() {
-      const typedArray = new Uint8Array(this.result);
-      try {
-        const pdf = await pdfjsLib.getDocument(typedArray).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1 });
-        setPageHeight(viewport.height);
-        const textContent = await page.getTextContent();
-        
-        const texts = textContent.items.map(item => ({
-          text: item.str,
-          x: item.transform[4],
-          y: viewport.height - item.transform[5],
-          width: item.width,
-          height: item.height
-        }));
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Load with PDF.js for text extraction
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.0 });
+      setPageHeight(viewport.height);
+      
+      const textContent = await page.getTextContent();
+      const texts = textContent.items.map(item => ({
+        text: item.str,
+        x: item.transform[4],
+        y: viewport.height - item.transform[5], // Store y-coordinate from top
+        fontSize: item.height || 12,
+        width: item.width || item.str.length * 5,
+        originalY: item.transform[5] // Store original y-coordinate
+      }));
 
-        setExtractedText(texts);
-        setPdfUrl(URL.createObjectURL(file));
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    };
-    fileReader.readAsArrayBuffer(file);
+      setExtractedText(texts);
+      setPdfUrl(URL.createObjectURL(file));
+      
+      console.log('Extracted text positions:', texts.map(({text, x, y, originalY}) => ({
+        text,
+        x,
+        y,
+        originalY
+      })));
+    } catch (error) {
+      console.error('Error loading PDF:', error);
+    }
   };
 
   const handleUpdateText = async () => {
     if (!pdfFile || !selectedText) return;
 
-    const fileReader = new FileReader();
-    fileReader.onload = async function() {
-      try {
-        const pdfDoc = await PDFDocument.load(this.result);
-        const pages = pdfDoc.getPages();
-        const page = pages[0];
-        const { height } = page.getSize();
+    try {
+      const arrayBuffer = await pdfFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const page = pdfDoc.getPages()[0];
+      const { height } = page.getSize();
 
-        // Calculate correct y-coordinate
-        const normalizedY = height - selectedText.y;
+      console.log('Updating text:', {
+        text: selectedText.text,
+        newText: editedText,
+        x: selectedText.x,
+        y: selectedText.originalY,
+        height: height
+      });
 
-        // Cover old text with white rectangle
-        page.drawRectangle({
-          x: selectedText.x,
-          y: normalizedY - 2,
-          width: selectedText.text.length * 8,
-          height: 14,
-          color: rgb(1, 1, 1)
-        });
+      // White out the original text
+      page.drawRectangle({
+        x: selectedText.x,
+        y: selectedText.originalY - 2,
+        width: selectedText.width + 4,
+        height: selectedText.fontSize + 4,
+        color: rgb(1, 1, 1)
+      });
 
-        // Draw new text
-        page.drawText(editedText, {
-          x: selectedText.x,
-          y: normalizedY,
-          size: 12,
-          color: rgb(0, 0, 0)
-        });
+      // Add new text at the same position
+      page.drawText(editedText, {
+        x: selectedText.x,
+        y: selectedText.originalY,
+        size: selectedText.fontSize,
+        color: rgb(0, 0, 0)
+      });
 
-        const pdfBytes = await pdfDoc.save();
-        const newUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
-        setPdfUrl(newUrl);
+      const modifiedPdfBytes = await pdfDoc.save();
+      const newUrl = URL.createObjectURL(
+        new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+      );
+      setPdfUrl(newUrl);
 
-        const updatedTexts = extractedText.map(item =>
+      // Update text list
+      setExtractedText(texts => 
+        texts.map(item => 
           item === selectedText ? { ...item, text: editedText } : item
-        );
-        setExtractedText(updatedTexts);
-        setSelectedText(null);
-      } catch (error) {
-        console.error('Error updating PDF:', error);
-      }
-    };
-    fileReader.readAsArrayBuffer(pdfFile);
+        )
+      );
+      setSelectedText(null);
+      setEditedText('');
+
+    } catch (error) {
+      console.error('Error updating PDF:', error);
+    }
   };
 
   return (
@@ -144,7 +156,7 @@ function App() {
                 className="p-2 hover:bg-gray-100 rounded flex justify-between items-center cursor-pointer"
               >
                 <span>{item.text}</span>
-                <Edit2 size={16} className="text-blue-500 opacity-0 hover:opacity-100" />
+                <span className="text-blue-500 opacity-0 hover:opacity-100">Edit</span>
               </div>
             ))}
           </div>
