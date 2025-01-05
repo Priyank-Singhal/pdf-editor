@@ -1,7 +1,9 @@
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import React from 'react'
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import DarkModeButton from './DarkModeButton';
 import { useDispatch, useSelector } from 'react-redux';
+import { setError, setUser } from '../store/slices/authSlice';
+import { auth } from '../utils/firebase';
 
 const Header = () => {
     const dispatch = useDispatch();
