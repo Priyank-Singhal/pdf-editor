@@ -48,6 +48,9 @@ function App() {
   const handleGoogleSignIn = async () => {
     try {
       const googleAuthProvider = new GoogleAuthProvider();
+      googleAuthProvider.setCustomParameters({
+        prompt: "select_account"
+      });
       const result = await signInWithPopup(auth, googleAuthProvider);
       dispatch(setUser({
         uid: result.user.uid,
@@ -247,8 +250,8 @@ function App() {
                   dispatch(setEditedText(item.text));
                 }}
                 className={`p-2 rounded flex justify-between items-center cursor-pointer ${darkMode
-                    ? 'hover:bg-gray-700'
-                    : 'hover:bg-gray-100'
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
                   }`}
               >
                 <span>{item.text}</span>

@@ -11,7 +11,8 @@ const uiSlice = createSlice({
   reducers: {
     toggleDarkMode: (state) => {
       state.darkMode = !state.darkMode;
-      Cookies.set('darkMode', state.darkMode);
+      // TODO: Save user preference on Firebase DB
+      Cookies.set('darkMode', state.darkMode, {expires: 365});
     }
   }
 });
